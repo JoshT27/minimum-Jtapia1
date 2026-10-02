@@ -7,6 +7,8 @@
 void minemu_irq_trampoline(void) __attribute__((noreturn));
 struct minemu_trap_frame *minemu_irq_dispatch(struct minemu_trap_frame *frame);
 
+int minemu_uart_getchar(void);
+
 static inline void minemu_irq_enable(void) {
     __asm__ volatile("cpsie i" : : : "memory");
 }
