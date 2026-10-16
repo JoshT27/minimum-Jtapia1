@@ -30,11 +30,11 @@ static void minemu_uart0_irq_handler(void) {
     }
 }
 
-int minemu_uart_getchar(void) {
+int minemu_uart_char(void) {
     int result = -1;
     minemu_irq_disable();
     if (uart_buffer_count > 0) {
-        result = (unsigned char)uart_buffer[0];
+        result = uart_buffer[0];
         for (size_t i = 1; i < uart_buffer_count; ++i) {
             uart_buffer[i - 1] = uart_buffer[i];
         }

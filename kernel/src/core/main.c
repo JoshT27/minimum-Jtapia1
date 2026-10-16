@@ -10,7 +10,6 @@ static void uart_putc(char c)
 {
     while (!(MINEMU_UART0->status & MINEMU_UART_STATUS_TX_READY)) {
     }
-
     MINEMU_UART0->tx_data = (uint8_t)c;
 }
 
@@ -24,79 +23,60 @@ static void uart_puts(const char *s)
 static void msh_process_line(char *line)
 {
     char *command = line;
-
     while (*command == ' ') {
         command++;
     }
-
     if (*command == '\0') {
         return;
     }
-
     char *end = command;
-
     while (*end != '\0' && *end != ' ') {
         end++;
     }
-
     if ((size_t)(end - command) == 4 &&
         command[0] == 'e' &&
         command[1] == 'c' &&
         command[2] == 'h' &&
         command[3] == 'o') {
-
         while (*end == ' ') {
             end++;
         }
-
         uart_puts(end);
         uart_putc('\n');
         return;
     }
-
     uart_puts("command not found: ");
-
     for (char *p = command; p < end; p++) {
         uart_putc(*p);
     }
-
     uart_putc('\n');
 }
 
 static void msh(void)
 {
     char line[MSH_LINE_SIZE + 1];
-
     for (;;) {
         uart_puts("msh> ");
-
         size_t length = 0;
-
         for (;;) {
-            int ch = minemu_uart_getchar();
-
+            int ch = minemu_uart_char();
             if (ch < 0) {
                 continue;
             }
-            
             if (ch == '\n') {
                 break;
             }
-
             if (ch == 0x08 || ch == 0x7f) {
                 if (length > 0) {
                     length--;
                 }
                 continue;
             }
-
             if (length < MSH_LINE_SIZE) {
                 line[length++] = (char)ch;
             }
         }
-
         line[length] = '\0';
-
         msh_process_line(line);
     }
 }
