@@ -1,8 +1,15 @@
+#include <stdbool.h>
 #include "minemu/irq.h"
 #include "minemu/syscall.h"
 #include "minemu/platform.h"
+#include "minemu/user_abi.h"
 
 #define UART_BUFFER_SIZE 128
+#define MINEMU_IOCTL_MAX_TRANSFER 256
+#define ST_MASK UINT32_C(0x1f)
+#define ST_USR UINT32_C(0x10)
+#define ST_THUMB UINT32_C(0x20)
+
 static volatile char uart_buffer[UART_BUFFER_SIZE];
 static volatile size_t uart_buffer_count;
 
@@ -44,11 +51,57 @@ int minemu_uart_char(void) {
     return result;
 }
 
+static bool user_buffer_is_valid(uint32_t address, uint32_t length) {
+    if (length > MINEMU_IOCTL_MAX_TRANSFER) {
+        return false;
+    }
+    if (length == 0) {
+        return true;
+    }
+    if(address == 0){
+        return false;
+    }
+    if(length > (UINT32_MAX - address)){
+        return false;
+    }
+    return true;
+}
 
-__attribute__((weak)) struct minemu_trap_frame *minemu_svc_dispatch(
+struct minemu_trap_frame *minemu_svc_dispatch(
     struct minemu_trap_frame *frame) {
-    (void)frame;
-    minemu_fail_stop();
+        if (frame->exception_id != MINEMU_EXCEPTION_SVC || (frame->spsr & ST_MASK) != ST_USR || (frame->spsr & ST_THUMB) != 0) {
+            frame->r[0] = (uint32_t)MINEMU_IOCTL_ERROR;
+            return frame;
+        }
+        switch(frame->r[7]){
+        case MINEMU_SYSCALL_IOCTL:
+            if(frame->r[0] != MINEMU_FD_UART_OUT || frame->r[1] != MINEMU_IOCTL_UART_WRITE){
+                frame->r[0] = (uint32_t)MINEMU_IOCTL_ERROR;
+                break;
+            }
+            {
+            uint32_t length = frame->r[3];
+            uint32_t address = frame->r[2];
+            if(!user_buffer_is_valid(address, length)){
+                frame->r[0] = (uint32_t)MINEMU_IOCTL_ERROR;
+                break;
+            }
+            const char *buffer = (const char *)(uintptr_t)address;
+
+
+            for(uint32_t i = 0; i < length; ++i){
+                while(!(MINEMU_UART0->status & MINEMU_UART_STATUS_TX_READY)){
+                }
+                MINEMU_UART0->tx_data = (uint8_t)buffer[i];
+            }
+            frame->r[0] = (uint32_t)length;
+        }
+        break;
+    default:
+        frame->r[0] = (uint32_t)MINEMU_IOCTL_ERROR;
+        break;
+    }
+    return frame;
 }
 
 __attribute__((weak)) struct minemu_trap_frame *minemu_irq_dispatch(
